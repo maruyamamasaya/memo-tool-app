@@ -6,94 +6,161 @@ struct MemoEditorView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \MemoFolder.name) private var folders: [MemoFolder]
     @Query(sort: \MemoTag.name) private var allTags: [MemoTag]
-    let memo: Memo?
+
+    private let originalMemo: Memo?
     private let store = MemoStore()
 
-    @State private var title: String
-    @State private var content: String
+    @State private var workingMemo: Memo?
+    @State private var editorText: String
     @State private var folderID: UUID?
-    @State private var selectedTagIDs: Set<UUID>
     @State private var format: String
-    @State private var showTags = false
+    @State private var saveTask: Task<Void, Never>?
+    @State private var saveStatus = ""
+    @State private var hasChanges = false
+    @FocusState private var editorFocused: Bool
 
     init(memo: Memo? = nil, initialFolder: MemoFolder? = nil) {
-        self.memo = memo
-        _title = State(initialValue: memo?.title ?? "")
-        _content = State(initialValue: memo?.content ?? "")
+        originalMemo = memo
+        _workingMemo = State(initialValue: memo)
+        _editorText = State(initialValue: Self.editorText(for: memo))
         _folderID = State(initialValue: memo?.folder?.id ?? initialFolder?.id)
-        _selectedTagIDs = State(initialValue: Set(memo?.tags.map(\.id) ?? []))
         _format = State(initialValue: memo?.format ?? "txt")
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("タイトル（未入力でも保存できます）", text: $title)
-                        .font(.title3.weight(.semibold))
-                    TextEditor(text: $content).frame(minHeight: 320, alignment: .top)
-                }
-                Section("整理") {
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Text("メモ")
+                    Image(systemName: "chevron.right").font(.caption2)
                     Picker("フォルダ", selection: $folderID) {
                         Text("未分類").tag(UUID?.none)
                         ForEach(folders) { Text($0.name).tag(Optional($0.id)) }
                     }
-                    Button { showTags = true } label: {
-                        LabeledContent("タグ", value: selectedTagIDs.isEmpty ? "なし" : "\(selectedTagIDs.count)個")
-                    }.foregroundStyle(.primary)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Picker("形式", selection: $format) {
-                        Text("テキスト (.txt)").tag("txt")
-                        Text("Markdown (.md)").tag("md")
+                        Text(".md").tag("md")
+                        Text(".txt").tag("txt")
                     }
+                    .labelsHidden()
+                    .fixedSize()
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+
+                ZStack(alignment: .topLeading) {
+                    if editorText.isEmpty {
+                        Text("タイトルを入力してください…\n\n本文を入力\n\n#タグ")
+                            .font(.body.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 18)
+                            .allowsHitTesting(false)
+                    }
+                    TextEditor(text: $editorText)
+                        .font(.body.monospaced())
+                        .lineSpacing(7)
+                        .scrollContentBackground(.hidden)
+                        .padding(.horizontal, 12)
+                        .focused($editorFocused)
+                }
+
+                HStack {
+                    Text("1行目がタイトル、最終行の #文字がタグです")
+                    Spacer()
+                    Text(saveStatus)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 7)
             }
-            .navigationTitle(memo == nil ? "新規メモ" : "メモを編集")
+            .navigationTitle(originalMemo == nil ? "新規メモ" : "メモ編集中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("保存", action: save).fontWeight(.semibold) }
+                ToolbarItem(placement: .confirmationAction) { Button("閉じる", action: close) }
             }
-            .sheet(isPresented: $showTags) { TagPickerView(selectedIDs: $selectedTagIDs) }
+            .onAppear { editorFocused = true }
+            .onChange(of: editorText) { _, _ in scheduleSave() }
+            .onChange(of: folderID) { _, _ in scheduleSave() }
+            .onChange(of: format) { _, _ in scheduleSave() }
+            .onDisappear { saveTask?.cancel(); if hasChanges { save() } }
         }
+    }
+
+    private static func editorText(for memo: Memo?) -> String {
+        guard let memo else { return "" }
+        var lines = [memo.title, memo.content]
+        if !memo.tags.isEmpty { lines.append(memo.tags.map { "#\($0.name)" }.joined(separator: " ")) }
+        while lines.last?.isEmpty == true { lines.removeLast() }
+        return lines.joined(separator: "\n")
+    }
+
+    private func scheduleSave() {
+        hasChanges = true
+        saveStatus = "編集中…"
+        saveTask?.cancel()
+        saveTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            save()
+        }
+    }
+
+    private func close() {
+        saveTask?.cancel()
+        if hasChanges { save() }
+        dismiss()
     }
 
     private func save() {
-        store.saveMemo(memo, title: title, content: content, folder: folders.first { $0.id == folderID }, tags: allTags.filter { selectedTagIDs.contains($0.id) }, format: format, in: context)
-        dismiss()
-    }
-}
-
-private struct TagPickerView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
-    @Query(sort: \MemoTag.name) private var tags: [MemoTag]
-    @Binding var selectedIDs: Set<UUID>
-    @State private var newTag = ""
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    HStack { TextField("新しいタグ", text: $newTag); Button("追加", action: add).disabled(cleanName.isEmpty) }
-                }
-                Section("既存のタグ") {
-                    ForEach(tags) { tag in
-                        Button { toggle(tag.id) } label: {
-                            HStack { Text("#\(tag.name)"); Spacer(); if selectedIDs.contains(tag.id) { Image(systemName: "checkmark") } }
-                        }.foregroundStyle(.primary)
-                    }
-                }
-            }
-            .navigationTitle("タグを選択")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完了") { dismiss() } } }
+        let parsed = parseEditor()
+        guard !parsed.title.isEmpty || !parsed.body.isEmpty else {
+            saveStatus = ""
+            hasChanges = false
+            return
         }
+        let tags = parsed.tagNames.map { name -> MemoTag in
+            if let existing = allTags.first(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) { return existing }
+            let tag = MemoTag(name: name)
+            context.insert(tag)
+            return tag
+        }
+        workingMemo = store.saveMemo(
+            workingMemo,
+            title: parsed.title.isEmpty ? "無題のメモ" : parsed.title,
+            content: parsed.body,
+            folder: folders.first { $0.id == folderID },
+            tags: tags,
+            format: parsed.format,
+            in: context
+        )
+        if format != parsed.format { format = parsed.format }
+        hasChanges = false
+        saveStatus = "保存しました"
     }
-    private var cleanName: String { newTag.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
-    private func add() {
-        guard selectedIDs.count < 20 else { return }
-        if let existing = tags.first(where: { $0.name.localizedCaseInsensitiveCompare(cleanName) == .orderedSame }) { selectedIDs.insert(existing.id) }
-        else { let tag = MemoTag(name: cleanName); context.insert(tag); selectedIDs.insert(tag.id); try? context.save() }
-        newTag = ""
+
+    private func parseEditor() -> (title: String, body: String, tagNames: [String], format: String) {
+        var lines = editorText.replacingOccurrences(of: "\r", with: "").components(separatedBy: "\n")
+        var title = (lines.isEmpty ? "" : lines.removeFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+        var parsedFormat = format
+        if let match = title.range(of: #"\.(md|txt)$"#, options: [.regularExpression, .caseInsensitive]) {
+            parsedFormat = String(title[match]).dropFirst().lowercased()
+            title.removeSubrange(match)
+            title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        var tagNames: [String] = []
+        if let last = lines.last, last.trimmingCharacters(in: .whitespaces).hasPrefix("#") {
+            lines.removeLast()
+            let pieces = last.components(separatedBy: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",、")))
+            for piece in pieces {
+                let name = piece.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty && !tagNames.contains(name) && tagNames.count < 20 { tagNames.append(name) }
+            }
+        }
+        return (title, lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines), tagNames, parsedFormat)
     }
-    private func toggle(_ id: UUID) { if selectedIDs.contains(id) { selectedIDs.remove(id) } else if selectedIDs.count < 20 { selectedIDs.insert(id) } }
 }

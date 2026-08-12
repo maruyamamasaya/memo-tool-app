@@ -15,6 +15,7 @@ struct HomeView: View {
     @State private var showNewMemo = false
     @State private var exportDocument: MemoArchiveDocument?
     @State private var exporting = false
+    @State private var operationError: String?
 
     private var visibleMemos: [Memo] {
         memos.filter { !$0.isDeleted && (search.isEmpty || [$0.title, $0.content].contains { $0.localizedCaseInsensitiveContains(search) } || $0.tags.contains { $0.name.localizedCaseInsensitiveContains(search) }) }
@@ -29,10 +30,10 @@ struct HomeView: View {
                     List(selection: $selected) {
                         ForEach(visibleMemos) { memo in
                             MemoRow(memo: memo).tag(memo.id).contentShape(Rectangle()).onTapGesture { if editMode == .inactive { editingMemo = memo } }
-                                .swipeActions(edge: .trailing) { Button(role: .destructive) { store.moveToTrash([memo], in: context) } label: { Label("ゴミ箱", systemImage: "trash") } }
+                                .swipeActions(edge: .trailing) { Button(role: .destructive) { trash([memo]) } label: { Label("ゴミ箱", systemImage: "trash") } }
                                 .contextMenu {
                                     Button { memo.isPinned.toggle(); memo.updatedAt = .now; try? context.save(); Task { try? await FirestoreService.shared.saveMemo(memo, isNew: !memo.isCloudBacked) } } label: { Label(memo.isPinned ? "ピンを外す" : "ピン留め", systemImage: "pin") }
-                                    Button(role: .destructive) { store.moveToTrash([memo], in: context) } label: { Label("ゴミ箱へ移動", systemImage: "trash") }
+                                    Button(role: .destructive) { trash([memo]) } label: { Label("ゴミ箱へ移動", systemImage: "trash") }
                                 }
                         }
                     }
@@ -54,10 +55,25 @@ struct HomeView: View {
             .sheet(isPresented: $showNewMemo) { MemoEditorView() }
             .sheet(item: $editingMemo) { MemoEditorView(memo: $0) }
             .fileExporter(isPresented: $exporting, document: exportDocument, contentType: .json, defaultFilename: "MemoApp-Export") { _ in exportDocument = nil }
+            .alert("ゴミ箱へ移動できませんでした", isPresented: Binding(get: { operationError != nil }, set: { if !$0 { operationError = nil } })) {
+                Button("OK") { operationError = nil }
+            } message: { Text(operationError ?? "") }
         }
     }
 
-    private func trashSelected() { store.moveToTrash(memos.filter { selected.contains($0.id) }, in: context); selected.removeAll(); editMode = .inactive }
+    private func trashSelected() { trash(memos.filter { selected.contains($0.id) }) }
+    private func trash(_ targets: [Memo]) {
+        guard !targets.isEmpty else { return }
+        Task { @MainActor in
+            do {
+                try await store.moveToTrash(targets, in: context)
+                selected.subtract(targets.map(\.id))
+                if selected.isEmpty { editMode = .inactive }
+            } catch {
+                operationError = error.localizedDescription
+            }
+        }
+    }
     private func exportSelected() {
         exportDocument = try? ImportExportService.document(memos: memos.filter { selected.contains($0.id) }, folders: folders, tags: tags)
         exporting = exportDocument != nil

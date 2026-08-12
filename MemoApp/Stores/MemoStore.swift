@@ -5,11 +5,12 @@ import SwiftData
 @MainActor
 final class MemoStore {
     private let logger = Logger(subsystem: FirebaseConfigurationService.bundleID, category: "MemoStore")
+    @discardableResult
     func saveMemo(
         _ memo: Memo?, title: String, content: String,
         folder: MemoFolder?, tags: [MemoTag], format: String,
         in context: ModelContext
-    ) {
+    ) -> Memo {
         let now = Date.now
         let isNew = memo == nil || memo?.isCloudBacked == false
         let savedMemo: Memo
@@ -27,29 +28,32 @@ final class MemoStore {
         }
         try? context.save()
         Task { do { try await FirestoreService.shared.saveMemo(savedMemo, isNew: isNew); savedMemo.isCloudBacked = true; try? context.save() } catch { logger.error("Firestore保存失敗: \(error.localizedDescription, privacy: .public)") } }
+        return savedMemo
     }
 
-    func moveToTrash(_ memos: [Memo], in context: ModelContext) {
+    func moveToTrash(_ memos: [Memo], in context: ModelContext) async throws {
+        let cloudMemos = memos.filter(\.isCloudBacked)
+        // Firestore first: otherwise an in-flight snapshot can immediately undo the
+        // optimistic local change and make the Trash button appear to do nothing.
+        if !cloudMemos.isEmpty { try await FirestoreService.shared.setTrash(cloudMemos, deleted: true) }
         let now = Date.now
         memos.forEach { $0.isDeleted = true; $0.deletedAt = now; $0.updatedAt = now }
-        try? context.save()
-        let cloudMemos = memos.filter(\.isCloudBacked)
-        Task { do { try await FirestoreService.shared.setTrash(cloudMemos, deleted: true) } catch { logger.error("ゴミ箱移動失敗: \(error.localizedDescription, privacy: .public)") } }
+        try context.save()
     }
 
-    func restore(_ memo: Memo, in context: ModelContext) {
+    func restore(_ memo: Memo, in context: ModelContext) async throws {
+        if memo.isCloudBacked { try await FirestoreService.shared.setTrash([memo], deleted: false) }
         memo.isDeleted = false
         memo.deletedAt = nil
         memo.updatedAt = .now
-        try? context.save()
-        if memo.isCloudBacked { Task { do { try await FirestoreService.shared.setTrash([memo], deleted: false) } catch { logger.error("復元失敗: \(error.localizedDescription, privacy: .public)") } } }
+        try context.save()
     }
 
-    func permanentlyDelete(_ memos: [Memo], in context: ModelContext) {
+    func permanentlyDelete(_ memos: [Memo], in context: ModelContext) async throws {
         let cloudMemos = memos.filter(\.isCloudBacked)
-        Task { do { try await FirestoreService.shared.permanentlyDelete(cloudMemos) } catch { logger.error("完全削除失敗: \(error.localizedDescription, privacy: .public)") } }
+        if !cloudMemos.isEmpty { try await FirestoreService.shared.permanentlyDelete(cloudMemos) }
         memos.forEach(context.delete)
-        try? context.save()
+        try context.save()
     }
 
     func deleteFolder(_ folder: MemoFolder, memos: [Memo], in context: ModelContext) {
