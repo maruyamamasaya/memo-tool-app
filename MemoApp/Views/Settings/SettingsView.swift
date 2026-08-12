@@ -3,6 +3,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SettingsView: View {
+    @EnvironmentObject private var auth: AuthenticationService
+    @EnvironmentObject private var sync: FirebaseSyncCoordinator
     @Environment(\.modelContext) private var context
     @Query private var memos: [Memo]
     @Query private var folders: [MemoFolder]
@@ -23,7 +25,13 @@ struct SettingsView: View {
                     Button { exportAll() } label: { Label("すべてのメモをJSONで書き出す", systemImage: "square.and.arrow.up") }
                     Button { importing = true } label: { Label("JSONから読み込む", systemImage: "square.and.arrow.down") }
                 } header: { Text("データ") } footer: { Text("人が確認できるJSON形式です。既存IDと重複するメモは読み飛ばします。") }
-                Section("このアプリについて") { LabeledContent("保存先", value: "このiPhone（SwiftData）"); LabeledContent("バージョン", value: "1.0") }
+                Section("このアプリについて") { LabeledContent("保存先", value: "Firestore＋オフラインキャッシュ"); LabeledContent("バージョン", value: "1.0") }
+                Section("Firebase") {
+                    LabeledContent("Project ID", value: FirebaseConfigurationService.expectedProjectID)
+                    LabeledContent("同期", value: sync.isConnected ? "接続済み" : "未接続")
+                    if let user = auth.user { LabeledContent("アカウント", value: user.email ?? user.displayName ?? user.uid) }
+                    Button("ログアウト", role: .destructive) { sync.stop(); auth.signOut() }
+                }
             }
             .navigationTitle("設定")
             .fileExporter(isPresented: $exporting, document: exportDocument, contentType: .json, defaultFilename: "MemoApp-Backup") { result in if case .failure(let error) = result { message = error.localizedDescription }; exportDocument = nil }
