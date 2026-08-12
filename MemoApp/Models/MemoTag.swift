@@ -3,11 +3,11 @@ import SwiftData
 
 @Model
 final class MemoTag {
-    @Attribute(.unique) var id: String
+    @Attribute(.unique) var id: UUID
     var name: String
     var createdAt: Date
 
-    init(id: String = UUID().uuidString, name: String, createdAt: Date = .now) {
+    init(id: UUID = UUID(), name: String, createdAt: Date = .now) {
         self.id = id
         self.name = name
         self.createdAt = createdAt

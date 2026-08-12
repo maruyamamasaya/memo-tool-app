@@ -1,3 +1,4 @@
+import Combine
 import FirebaseFirestore
 import Foundation
 import OSLog
@@ -12,6 +13,7 @@ final class FirebaseSyncCoordinator: ObservableObject {
     private var folderListener: ListenerRegistration?
     private var context: ModelContext?
     private var cloudFolders: [CloudFolder] = []
+    private var memoFolderIDs: [String: String] = [:]
     private let logger = Logger(subsystem: FirebaseConfigurationService.bundleID, category: "Synchronization")
 
     func start(context: ModelContext) async {
@@ -37,10 +39,14 @@ final class FirebaseSyncCoordinator: ObservableObject {
             do {
                 let local = try context.fetch(FetchDescriptor<MemoFolder>()); let ids = Set(records.map(\.id))
                 for record in records {
-                    if let folder = local.first(where: { $0.id == record.id }) { folder.name = record.name; folder.colorHex = record.colorHex }
-                    else { context.insert(MemoFolder(id: record.id, name: record.name, colorHex: record.colorHex, createdAt: record.createdAt)) }
+                    if let folder = local.first(where: { $0.cloudID == record.id }) { folder.name = record.name; folder.colorHex = record.colorHex; folder.isCloudBacked = true }
+                    else { context.insert(MemoFolder(cloudID: record.id, isCloudBacked: true, name: record.name, colorHex: record.colorHex, createdAt: record.createdAt)) }
                 }
-                local.filter { !ids.contains($0.id) }.forEach(context.delete); try context.save()
+                local.filter { $0.isCloudBacked && !ids.contains($0.cloudID) }.forEach(context.delete)
+                let refreshedFolders = try context.fetch(FetchDescriptor<MemoFolder>())
+                let memos = try context.fetch(FetchDescriptor<Memo>())
+                memos.filter(\.isCloudBacked).forEach { memo in memo.folder = refreshedFolders.first { $0.cloudID == memoFolderIDs[memo.cloudID] } }
+                try context.save()
             } catch { report(error, action: "フォルダキャッシュ更新") }
         }
     }
@@ -51,21 +57,22 @@ final class FirebaseSyncCoordinator: ObservableObject {
         case .success(let records):
             guard let context else { return }
             do {
+                memoFolderIDs = Dictionary(uniqueKeysWithValues: records.compactMap { record in record.folderID.map { (record.id, $0) } })
                 let localMemos = try context.fetch(FetchDescriptor<Memo>()); let folders = try context.fetch(FetchDescriptor<MemoFolder>()); var localTags = try context.fetch(FetchDescriptor<MemoTag>())
                 let ids = Set(records.map(\.id))
                 for record in records {
                     let memoTags = record.tags.map { name -> MemoTag in
                         if let tag = localTags.first(where: { $0.name == name }) { return tag }
-                        let tag = MemoTag(id: "tag:\(name.lowercased())", name: name); context.insert(tag); localTags.append(tag); return tag
+                        let tag = MemoTag(name: name); context.insert(tag); localTags.append(tag); return tag
                     }
-                    if let memo = localMemos.first(where: { $0.id == record.id }) {
-                        memo.title = record.title; memo.content = record.body; memo.format = record.format; memo.folder = folders.first { $0.id == record.folderID }; memo.tags = memoTags
+                    if let memo = localMemos.first(where: { $0.cloudID == record.id }) {
+                        memo.title = record.title; memo.content = record.body; memo.format = record.format; memo.folder = folders.first { $0.cloudID == record.folderID }; memo.tags = memoTags; memo.isCloudBacked = true
                         memo.isPinned = record.pinned; memo.isDeleted = record.trashed; memo.createdAt = record.createdAt; memo.updatedAt = record.updatedAt; memo.deletedAt = record.trashedAt
                     } else {
-                        context.insert(Memo(id: record.id, title: record.title, content: record.body, createdAt: record.createdAt, updatedAt: record.updatedAt, folder: folders.first { $0.id == record.folderID }, tags: memoTags, isDeleted: record.trashed, deletedAt: record.trashedAt, isPinned: record.pinned, format: record.format))
+                        context.insert(Memo(cloudID: record.id, isCloudBacked: true, title: record.title, content: record.body, createdAt: record.createdAt, updatedAt: record.updatedAt, folder: folders.first { $0.cloudID == record.folderID }, tags: memoTags, isDeleted: record.trashed, deletedAt: record.trashedAt, isPinned: record.pinned, format: record.format))
                     }
                 }
-                localMemos.filter { !ids.contains($0.id) }.forEach(context.delete); try context.save()
+                localMemos.filter { $0.isCloudBacked && !ids.contains($0.cloudID) }.forEach(context.delete); try context.save()
                 isSyncing = false; isConnected = true; errorMessage = nil
             } catch { report(error, action: "メモキャッシュ更新") }
         }

@@ -11,7 +11,7 @@ final class MemoStore {
         in context: ModelContext
     ) {
         let now = Date.now
-        let isNew = memo == nil
+        let isNew = memo == nil || memo?.isCloudBacked == false
         let savedMemo: Memo
         if let memo {
             memo.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -26,14 +26,15 @@ final class MemoStore {
             context.insert(memo); savedMemo = memo
         }
         try? context.save()
-        Task { do { try await FirestoreService.shared.saveMemo(savedMemo, isNew: isNew) } catch { logger.error("Firestore保存失敗: \(error.localizedDescription, privacy: .public)") } }
+        Task { do { try await FirestoreService.shared.saveMemo(savedMemo, isNew: isNew); savedMemo.isCloudBacked = true; try? context.save() } catch { logger.error("Firestore保存失敗: \(error.localizedDescription, privacy: .public)") } }
     }
 
     func moveToTrash(_ memos: [Memo], in context: ModelContext) {
         let now = Date.now
         memos.forEach { $0.isDeleted = true; $0.deletedAt = now; $0.updatedAt = now }
         try? context.save()
-        Task { do { try await FirestoreService.shared.setTrash(memos, deleted: true) } catch { logger.error("ゴミ箱移動失敗: \(error.localizedDescription, privacy: .public)") } }
+        let cloudMemos = memos.filter(\.isCloudBacked)
+        Task { do { try await FirestoreService.shared.setTrash(cloudMemos, deleted: true) } catch { logger.error("ゴミ箱移動失敗: \(error.localizedDescription, privacy: .public)") } }
     }
 
     func restore(_ memo: Memo, in context: ModelContext) {
@@ -41,18 +42,19 @@ final class MemoStore {
         memo.deletedAt = nil
         memo.updatedAt = .now
         try? context.save()
-        Task { do { try await FirestoreService.shared.setTrash([memo], deleted: false) } catch { logger.error("復元失敗: \(error.localizedDescription, privacy: .public)") } }
+        if memo.isCloudBacked { Task { do { try await FirestoreService.shared.setTrash([memo], deleted: false) } catch { logger.error("復元失敗: \(error.localizedDescription, privacy: .public)") } } }
     }
 
     func permanentlyDelete(_ memos: [Memo], in context: ModelContext) {
-        Task { do { try await FirestoreService.shared.permanentlyDelete(memos) } catch { logger.error("完全削除失敗: \(error.localizedDescription, privacy: .public)") } }
+        let cloudMemos = memos.filter(\.isCloudBacked)
+        Task { do { try await FirestoreService.shared.permanentlyDelete(cloudMemos) } catch { logger.error("完全削除失敗: \(error.localizedDescription, privacy: .public)") } }
         memos.forEach(context.delete)
         try? context.save()
     }
 
     func deleteFolder(_ folder: MemoFolder, memos: [Memo], in context: ModelContext) {
         let affected = memos.filter { $0.folder?.id == folder.id }
-        Task { do { try await FirestoreService.shared.deleteFolder(folder, affectedMemos: affected) } catch { logger.error("フォルダ削除失敗: \(error.localizedDescription, privacy: .public)") } }
+        if folder.isCloudBacked { Task { do { try await FirestoreService.shared.deleteFolder(folder, affectedMemos: affected.filter(\.isCloudBacked)) } catch { logger.error("フォルダ削除失敗: \(error.localizedDescription, privacy: .public)") } } }
         affected.forEach { $0.folder = nil; $0.updatedAt = .now }
         context.delete(folder)
         try? context.save()

@@ -54,12 +54,12 @@ private struct FolderEditorView: View {
     }
     private var cleanName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private func save() {
-        let isNew = folder == nil
+        let isNew = folder == nil || folder?.isCloudBacked == false
         let saved: MemoFolder
         if let folder { folder.name = cleanName; folder.colorHex = colorHex; saved = folder }
         else { let folder = MemoFolder(name: cleanName, colorHex: colorHex); context.insert(folder); saved = folder }
         try? context.save()
-        Task { try? await FirestoreService.shared.saveFolder(saved, isNew: isNew) }
+        Task { if (try? await FirestoreService.shared.saveFolder(saved, isNew: isNew)) != nil { saved.isCloudBacked = true; try? context.save() } }
         dismiss()
     }
 }

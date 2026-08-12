@@ -3,7 +3,9 @@ import SwiftData
 
 @Model
 final class Memo {
-    @Attribute(.unique) var id: String
+    @Attribute(.unique) var id: UUID
+    var cloudID: String
+    var isCloudBacked: Bool
     var title: String
     var content: String
     var createdAt: Date
@@ -16,13 +18,16 @@ final class Memo {
     @Relationship(deleteRule: .nullify) var tags: [MemoTag]
 
     init(
-        id: String = UUID().uuidString, title: String = "", content: String = "",
+        id: UUID = UUID(), cloudID: String = UUID().uuidString, isCloudBacked: Bool = false,
+        title: String = "", content: String = "",
         createdAt: Date = .now, updatedAt: Date = .now,
         folder: MemoFolder? = nil, tags: [MemoTag] = [],
         isDeleted: Bool = false, deletedAt: Date? = nil,
         isPinned: Bool = false, format: String = "txt"
     ) {
         self.id = id
+        self.cloudID = cloudID
+        self.isCloudBacked = isCloudBacked
         self.title = title
         self.content = content
         self.createdAt = createdAt

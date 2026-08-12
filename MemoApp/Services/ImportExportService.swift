@@ -11,11 +11,11 @@ struct MemoArchive: Codable {
     var memos: [MemoRecord]
 }
 
-struct FolderRecord: Codable { var id: String; var name: String; var colorHex: String; var createdAt: Date }
-struct TagRecord: Codable { var id: String; var name: String; var createdAt: Date }
+struct FolderRecord: Codable { var id: UUID; var name: String; var colorHex: String; var createdAt: Date }
+struct TagRecord: Codable { var id: UUID; var name: String; var createdAt: Date }
 struct MemoRecord: Codable {
-    var id: String; var title: String; var content: String; var createdAt: Date; var updatedAt: Date
-    var folderID: String?; var tagIDs: [String]; var tags: [String]
+    var id: UUID; var title: String; var content: String; var createdAt: Date; var updatedAt: Date
+    var folderID: UUID?; var tagIDs: [UUID]; var tags: [String]
     var isDeleted: Bool; var deletedAt: Date?; var isPinned: Bool; var format: String
 }
 

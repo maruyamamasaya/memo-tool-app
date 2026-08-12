@@ -34,11 +34,11 @@ final class FirestoreService: @unchecked Sendable {
         let title = memo.displayTitle
         var data: [String: Any] = [
             "title": title, "body": memo.content, "type": "text", "format": memo.format,
-            "folderId": memo.folder?.id as Any, "tags": memo.tags.map(\.name), "pinned": memo.isPinned,
-            "trashed": memo.isDeleted, "trashedAt": memo.deletedAt.map(Timestamp.init(date:)) as Any,
+            "folderId": memo.folder.map { $0.cloudID as Any } ?? NSNull(), "tags": memo.tags.map(\.name), "pinned": memo.isPinned,
+            "trashed": memo.isDeleted, "trashedAt": memo.deletedAt.map { Timestamp(date: $0) as Any } ?? NSNull(),
             "updatedBy": user.uid, "updatedByName": user.displayName ?? "名前未設定", "updatedAt": FieldValue.serverTimestamp()
         ]
-        let reference = db.collection("memos").document(memo.id)
+        let reference = db.collection("memos").document(memo.cloudID)
         if isNew {
             data.merge(["groupId": Self.groupID, "lastOpenedAt": FieldValue.serverTimestamp(), "createdBy": user.uid,
                         "createdByName": user.displayName ?? "名前未設定", "createdAt": FieldValue.serverTimestamp()]) { _, new in new }
@@ -52,18 +52,18 @@ final class FirestoreService: @unchecked Sendable {
         for memo in memos {
             batch.updateData(["trashed": deleted, "trashedAt": deleted ? FieldValue.serverTimestamp() : NSNull(),
                               "updatedBy": user.uid, "updatedByName": user.displayName ?? "名前未設定", "updatedAt": FieldValue.serverTimestamp()],
-                             forDocument: db.collection("memos").document(memo.id))
+                             forDocument: db.collection("memos").document(memo.cloudID))
         }
         try await batch.commit()
     }
 
     func permanentlyDelete(_ memos: [Memo]) async throws {
-        let batch = db.batch(); memos.forEach { batch.deleteDocument(db.collection("memos").document($0.id)) }; try await batch.commit()
+        let batch = db.batch(); memos.forEach { batch.deleteDocument(db.collection("memos").document($0.cloudID)) }; try await batch.commit()
     }
 
     func saveFolder(_ folder: MemoFolder, isNew: Bool) async throws {
         guard let user = Auth.auth().currentUser else { throw CloudError.notAuthenticated }
-        let ref = db.collection("folders").document(folder.id)
+        let ref = db.collection("folders").document(folder.cloudID)
         if isNew { try await ref.setData(["groupId": Self.groupID, "name": folder.name, "color": "#\(folder.colorHex)", "createdBy": user.uid, "createdAt": FieldValue.serverTimestamp()]) }
         else { try await ref.updateData(["name": folder.name, "color": "#\(folder.colorHex)"]) }
     }
@@ -71,8 +71,8 @@ final class FirestoreService: @unchecked Sendable {
     func deleteFolder(_ folder: MemoFolder, affectedMemos: [Memo]) async throws {
         guard let user = Auth.auth().currentUser else { throw CloudError.notAuthenticated }
         let batch = db.batch()
-        affectedMemos.forEach { batch.updateData(["folderId": NSNull(), "updatedBy": user.uid, "updatedByName": user.displayName ?? "名前未設定", "updatedAt": FieldValue.serverTimestamp()], forDocument: db.collection("memos").document($0.id)) }
-        batch.deleteDocument(db.collection("folders").document(folder.id)); try await batch.commit()
+        affectedMemos.forEach { batch.updateData(["folderId": NSNull(), "updatedBy": user.uid, "updatedByName": user.displayName ?? "名前未設定", "updatedAt": FieldValue.serverTimestamp()], forDocument: db.collection("memos").document($0.cloudID)) }
+        batch.deleteDocument(db.collection("folders").document(folder.cloudID)); try await batch.commit()
     }
 
     enum CloudError: LocalizedError { case notAuthenticated, notGroupMember
@@ -83,7 +83,7 @@ final class FirestoreService: @unchecked Sendable {
 struct CloudMemo: Sendable {
     let id, title, body, format: String; let folderID: String?; let tags: [String]
     let pinned, trashed: Bool; let createdAt, updatedAt: Date; let trashedAt: Date?
-    init?(_ document: QueryDocumentSnapshot) {
+    nonisolated init?(_ document: QueryDocumentSnapshot) {
         let data = document.data(); id = document.documentID; title = data["title"] as? String ?? ""; body = data["body"] as? String ?? ""
         format = ["md", "txt"].contains(data["format"] as? String ?? "") ? data["format"] as! String : "txt"
         folderID = data["folderId"] as? String; tags = data["tags"] as? [String] ?? []; pinned = data["pinned"] as? Bool ?? false; trashed = data["trashed"] as? Bool ?? false
@@ -93,5 +93,5 @@ struct CloudMemo: Sendable {
 
 struct CloudFolder: Sendable {
     let id, name, colorHex: String; let createdAt: Date
-    init?(_ document: QueryDocumentSnapshot) { let data = document.data(); id = document.documentID; guard let name = data["name"] as? String else { return nil }; self.name = name; colorHex = (data["color"] as? String ?? "#64748B").replacingOccurrences(of: "#", with: ""); createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? .now }
+    nonisolated init?(_ document: QueryDocumentSnapshot) { let data = document.data(); id = document.documentID; guard let name = data["name"] as? String else { return nil }; self.name = name; colorHex = (data["color"] as? String ?? "#64748B").replacingOccurrences(of: "#", with: ""); createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? .now }
 }

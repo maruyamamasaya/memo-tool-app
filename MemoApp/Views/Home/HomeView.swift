@@ -9,7 +9,7 @@ struct HomeView: View {
     @Query(sort: \MemoTag.name) private var tags: [MemoTag]
     private let store = MemoStore()
     @State private var search = ""
-    @State private var selected = Set<String>()
+    @State private var selected = Set<UUID>()
     @State private var editMode: EditMode = .inactive
     @State private var editingMemo: Memo?
     @State private var showNewMemo = false
@@ -31,7 +31,7 @@ struct HomeView: View {
                             MemoRow(memo: memo).tag(memo.id).contentShape(Rectangle()).onTapGesture { if editMode == .inactive { editingMemo = memo } }
                                 .swipeActions(edge: .trailing) { Button(role: .destructive) { store.moveToTrash([memo], in: context) } label: { Label("ゴミ箱", systemImage: "trash") } }
                                 .contextMenu {
-                                    Button { memo.isPinned.toggle(); memo.updatedAt = .now; try? context.save(); Task { try? await FirestoreService.shared.saveMemo(memo, isNew: false) } } label: { Label(memo.isPinned ? "ピンを外す" : "ピン留め", systemImage: "pin") }
+                                    Button { memo.isPinned.toggle(); memo.updatedAt = .now; try? context.save(); Task { try? await FirestoreService.shared.saveMemo(memo, isNew: !memo.isCloudBacked) } } label: { Label(memo.isPinned ? "ピンを外す" : "ピン留め", systemImage: "pin") }
                                     Button(role: .destructive) { store.moveToTrash([memo], in: context) } label: { Label("ゴミ箱へ移動", systemImage: "trash") }
                                 }
                         }
