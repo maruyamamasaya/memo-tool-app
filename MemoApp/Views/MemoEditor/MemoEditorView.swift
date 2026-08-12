@@ -11,8 +11,8 @@ struct MemoEditorView: View {
 
     @State private var title: String
     @State private var content: String
-    @State private var folderID: UUID?
-    @State private var selectedTagIDs: Set<UUID>
+    @State private var folderID: String?
+    @State private var selectedTagIDs: Set<String>
     @State private var format: String
     @State private var showTags = false
 
@@ -35,7 +35,7 @@ struct MemoEditorView: View {
                 }
                 Section("整理") {
                     Picker("フォルダ", selection: $folderID) {
-                        Text("未分類").tag(UUID?.none)
+                        Text("未分類").tag(String?.none)
                         ForEach(folders) { Text($0.name).tag(Optional($0.id)) }
                     }
                     Button { showTags = true } label: {
@@ -67,7 +67,7 @@ private struct TagPickerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Query(sort: \MemoTag.name) private var tags: [MemoTag]
-    @Binding var selectedIDs: Set<UUID>
+    @Binding var selectedIDs: Set<String>
     @State private var newTag = ""
 
     var body: some View {
@@ -95,5 +95,5 @@ private struct TagPickerView: View {
         else { let tag = MemoTag(name: cleanName); context.insert(tag); selectedIDs.insert(tag.id); try? context.save() }
         newTag = ""
     }
-    private func toggle(_ id: UUID) { if selectedIDs.contains(id) { selectedIDs.remove(id) } else if selectedIDs.count < 20 { selectedIDs.insert(id) } }
+    private func toggle(_ id: String) { if selectedIDs.contains(id) { selectedIDs.remove(id) } else if selectedIDs.count < 20 { selectedIDs.insert(id) } }
 }

@@ -3,7 +3,7 @@ import SwiftData
 
 @Model
 final class Memo {
-    @Attribute(.unique) var id: UUID
+    @Attribute(.unique) var id: String
     var title: String
     var content: String
     var createdAt: Date
@@ -16,7 +16,7 @@ final class Memo {
     @Relationship(deleteRule: .nullify) var tags: [MemoTag]
 
     init(
-        id: UUID = UUID(), title: String = "", content: String = "",
+        id: String = UUID().uuidString, title: String = "", content: String = "",
         createdAt: Date = .now, updatedAt: Date = .now,
         folder: MemoFolder? = nil, tags: [MemoTag] = [],
         isDeleted: Bool = false, deletedAt: Date? = nil,

@@ -9,7 +9,7 @@ struct HomeView: View {
     @Query(sort: \MemoTag.name) private var tags: [MemoTag]
     private let store = MemoStore()
     @State private var search = ""
-    @State private var selected = Set<UUID>()
+    @State private var selected = Set<String>()
     @State private var editMode: EditMode = .inactive
     @State private var editingMemo: Memo?
     @State private var showNewMemo = false
