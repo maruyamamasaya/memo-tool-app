@@ -1,0 +1,83 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isGroupMember(groupId) {
+      return signedIn()
+        && groupId is string
+        && exists(/databases/$(database)/documents/groups/$(groupId))
+        && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.members;
+    }
+    function validMemo(data) {
+      return data.keys().hasOnly([
+          'groupId', 'title', 'body', 'type', 'format', 'folderId', 'tags', 'pinned',
+          'trashed', 'trashedAt', 'lastOpenedAt', 'createdBy', 'createdByName',
+          'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'
+        ])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 120
+        && data.body is string
+        && data.type in ['text', 'checklist', 'snippet']
+        && data.format in ['md', 'txt']
+        && (data.folderId == null || data.folderId is string)
+        && data.tags is list && data.tags.size() <= 20
+        && data.pinned is bool && data.trashed is bool;
+    }
+
+    match /users/{userId} {
+      allow read, create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+    match /groups/{groupId} {
+      allow read: if isGroupMember(groupId);
+      allow write: if false;
+    }
+    match /memos/{memoId} {
+      allow read, delete: if isGroupMember(resource.data.groupId);
+      allow create: if isGroupMember(request.resource.data.groupId)
+        && validMemo(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isGroupMember(resource.data.groupId)
+        && request.resource.data.groupId == resource.data.groupId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdByName == resource.data.createdByName
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'body', 'type', 'format', 'folderId', 'tags', 'pinned', 'trashed',
+          'trashedAt', 'lastOpenedAt', 'updatedBy', 'updatedByName', 'updatedAt'
+        ])
+        // Opening a memo may update lastOpenedAt only; all other edits carry audit fields.
+        && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastOpenedAt'])
+          || (request.resource.data.updatedBy == request.auth.uid
+            && request.resource.data.updatedAt == request.time))
+        // Legacy V1/V2 documents are accepted until a normal save fills V3 defaults.
+        && (!request.resource.data.keys().hasAll(['type','format','folderId','tags','pinned','trashed'])
+          || validMemo(request.resource.data));
+    }
+    match /folders/{folderId} {
+      allow read, delete: if isGroupMember(resource.data.groupId);
+      allow create: if isGroupMember(request.resource.data.groupId)
+        && request.resource.data.keys().hasOnly(['groupId','name','color','createdBy','createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.color is string
+        && request.resource.data.color.matches('^#[0-9a-fA-F]{6}$')
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if isGroupMember(resource.data.groupId)
+        && request.resource.data.groupId == resource.data.groupId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','color'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.color is string
+        && request.resource.data.color.matches('^#[0-9a-fA-F]{6}$');
+    }
+  }
+}
