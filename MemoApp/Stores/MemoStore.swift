@@ -33,12 +33,21 @@ final class MemoStore {
 
     func moveToTrash(_ memos: [Memo], in context: ModelContext) async throws {
         let cloudMemos = memos.filter(\.isCloudBacked)
-        // Firestore first: otherwise an in-flight snapshot can immediately undo the
-        // optimistic local change and make the Trash button appear to do nothing.
-        if !cloudMemos.isEmpty { try await FirestoreService.shared.setTrash(cloudMemos, deleted: true) }
         let now = Date.now
+        let previousStates = memos.map { ($0, $0.isDeleted, $0.deletedAt, $0.updatedAt) }
         memos.forEach { $0.isDeleted = true; $0.deletedAt = now; $0.updatedAt = now }
         try context.save()
+        do {
+            if !cloudMemos.isEmpty { try await FirestoreService.shared.setTrash(cloudMemos, deleted: true) }
+        } catch {
+            previousStates.forEach { memo, isDeleted, deletedAt, updatedAt in
+                memo.isDeleted = isDeleted
+                memo.deletedAt = deletedAt
+                memo.updatedAt = updatedAt
+            }
+            try? context.save()
+            throw error
+        }
     }
 
     func restore(_ memo: Memo, in context: ModelContext) async throws {

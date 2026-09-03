@@ -50,9 +50,13 @@ final class FirestoreService: @unchecked Sendable {
         guard let user = Auth.auth().currentUser else { throw CloudError.notAuthenticated }
         let batch = db.batch()
         for memo in memos {
-            batch.updateData(["trashed": deleted, "trashedAt": deleted ? FieldValue.serverTimestamp() : NSNull(),
-                              "updatedBy": user.uid, "updatedByName": user.displayName ?? "名前未設定", "updatedAt": FieldValue.serverTimestamp()],
-                             forDocument: db.collection("memos").document(memo.cloudID))
+            batch.updateData([
+                "trashed": deleted,
+                "trashedAt": deleted ? FieldValue.serverTimestamp() : NSNull(),
+                "updatedBy": user.uid,
+                "updatedByName": user.displayName ?? "名前未設定",
+                "updatedAt": FieldValue.serverTimestamp()
+            ], forDocument: db.collection("memos").document(memo.cloudID))
         }
         try await batch.commit()
     }
