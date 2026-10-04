@@ -5,9 +5,9 @@ struct TrashView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Memo.deletedAt, order: .reverse) private var memos: [Memo]
     @State private var purgeTarget: Memo?
-    @State private var editingMemo: Memo?
+    @State private var selectedMemo: Memo?
     @State private var operationError: String?
-    private var trashed: [Memo] { memos.filter(\.isDeleted) }
+    private var trashed: [Memo] { memos.filter(\.isTrashed) }
 
     var body: some View {
         NavigationStack {
@@ -15,7 +15,7 @@ struct TrashView: View {
                 ForEach(trashed) { memo in
                     MemoRow(memo: memo)
                         .contentShape(Rectangle())
-                        .onTapGesture { editingMemo = memo }
+                        .onTapGesture { selectedMemo = memo }
                         .swipeActions(edge: .leading) { Button { restore(memo) } label: { Label("復元", systemImage: "arrow.uturn.backward") }.tint(.green) }
                         .swipeActions(edge: .trailing) { Button(role: .destructive) { purgeTarget = memo } label: { Label("完全削除", systemImage: "trash.slash") } }
                         .contextMenu {
@@ -24,9 +24,10 @@ struct TrashView: View {
                         }
                 }
             }
+            .memoTheme()
             .navigationTitle("ゴミ箱")
             .overlay { if trashed.isEmpty { ContentUnavailableView("ゴミ箱は空です", systemImage: "trash") } }
-            .sheet(item: $editingMemo) { MemoEditorView(memo: $0) }
+            .sheet(item: $selectedMemo) { MemoReadOnlyView(memo: $0) }
             .confirmationDialog("このメモを完全に削除しますか？", isPresented: Binding(get: { purgeTarget != nil }, set: { if !$0 { purgeTarget = nil } }), titleVisibility: .visible) {
                 Button("完全に削除", role: .destructive) {
                     if let purgeTarget { permanentlyDelete(purgeTarget) }

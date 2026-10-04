@@ -4,7 +4,6 @@ import SwiftUI
 struct MemoEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query(sort: \MemoFolder.name) private var folders: [MemoFolder]
     @Query(sort: \MemoTag.name) private var allTags: [MemoTag]
 
@@ -18,7 +17,6 @@ struct MemoEditorView: View {
     @State private var saveTask: Task<Void, Never>?
     @State private var saveStatus = ""
     @State private var hasChanges = false
-    @State private var showingReadOnly = false
     @FocusState private var editorFocused: Bool
 
     init(memo: Memo? = nil, initialFolder: MemoFolder? = nil) {
@@ -80,24 +78,11 @@ struct MemoEditorView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 7)
             }
+            .memoTheme()
             .navigationTitle(originalMemo == nil ? "新規メモ" : "メモ編集中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(horizontalSizeClass == .compact ? "表示" : "表示のみ") {
-                        showingReadOnly = true
-                    }
-                    .font(horizontalSizeClass == .compact ? .caption : .body)
-                }
                 ToolbarItem(placement: .confirmationAction) { Button("閉じる", action: close) }
-            }
-            .sheet(isPresented: $showingReadOnly) {
-                let parsed = parseEditor()
-                MemoReadOnlyView(
-                    title: parsed.title.isEmpty ? "無題のメモ" : parsed.title,
-                    content: parsed.body,
-                    format: parsed.format
-                )
             }
             .onAppear { editorFocused = true }
             .onChange(of: editorText) { _, _ in scheduleSave() }

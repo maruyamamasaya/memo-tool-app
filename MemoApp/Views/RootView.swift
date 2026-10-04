@@ -5,6 +5,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("memoTheme") private var selectedTheme = MemoTheme.standard.rawValue
     @StateObject private var auth = AuthenticationService()
     @StateObject private var sync = FirebaseSyncCoordinator()
 
@@ -24,8 +25,10 @@ struct RootView: View {
                 .task(id: auth.user?.uid) { await sync.start(context: context) }
             }
         }
+        .memoTheme()
+        .tint((MemoTheme(rawValue: selectedTheme) ?? .standard).accent)
         .environmentObject(auth).environmentObject(sync)
-        .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
+        .preferredColorScheme(selectedTheme != MemoTheme.standard.rawValue ? .dark : appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
         .onOpenURL { auth.handleOpenURL($0) }
         .alert("Firebase", isPresented: Binding(get: { auth.errorMessage != nil || sync.errorMessage != nil }, set: { if !$0 { auth.errorMessage = nil; sync.errorMessage = nil } })) {
             Button("OK") { auth.errorMessage = nil; sync.errorMessage = nil }

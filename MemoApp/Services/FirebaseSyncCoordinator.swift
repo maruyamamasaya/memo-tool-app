@@ -66,10 +66,16 @@ final class FirebaseSyncCoordinator: ObservableObject {
                         let tag = MemoTag(name: name); context.insert(tag); localTags.append(tag); return tag
                     }
                     if let memo = localMemos.first(where: { $0.cloudID == record.id }) {
+                        // Ignore out-of-order cloud snapshots. Compare
+                        // server timestamps so device clock differences cannot interfere.
+                        if let cloudUpdatedAt = memo.cloudUpdatedAt, record.updatedAt < cloudUpdatedAt { continue }
+                        memo.cloudUpdatedAt = record.updatedAt
                         memo.title = record.title; memo.content = record.body; memo.format = record.format; memo.folder = folders.first { $0.cloudID == record.folderID }; memo.tags = memoTags; memo.isCloudBacked = true
-                        memo.isPinned = record.pinned; memo.isDeleted = record.trashed; memo.createdAt = record.createdAt; memo.updatedAt = record.updatedAt; memo.deletedAt = record.trashedAt
+                        memo.isPinned = record.pinned; memo.isTrashed = record.trashed; memo.createdAt = record.createdAt; memo.updatedAt = record.updatedAt; memo.deletedAt = record.trashedAt
                     } else {
-                        context.insert(Memo(cloudID: record.id, isCloudBacked: true, title: record.title, content: record.body, createdAt: record.createdAt, updatedAt: record.updatedAt, folder: folders.first { $0.cloudID == record.folderID }, tags: memoTags, isDeleted: record.trashed, deletedAt: record.trashedAt, isPinned: record.pinned, format: record.format))
+                        let memo = Memo(cloudID: record.id, isCloudBacked: true, title: record.title, content: record.body, createdAt: record.createdAt, updatedAt: record.updatedAt, folder: folders.first { $0.cloudID == record.folderID }, tags: memoTags, isTrashed: record.trashed, deletedAt: record.trashedAt, isPinned: record.pinned, format: record.format)
+                        memo.cloudUpdatedAt = record.updatedAt
+                        context.insert(memo)
                     }
                 }
                 localMemos.filter { $0.isCloudBacked && !ids.contains($0.cloudID) }.forEach(context.delete); try context.save()

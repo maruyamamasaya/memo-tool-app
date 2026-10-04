@@ -5,23 +5,27 @@ struct FolderListView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \MemoFolder.name) private var folders: [MemoFolder]
     @Query private var memos: [Memo]
+    @AppStorage("memoTheme") private var selectedTheme = MemoTheme.standard.rawValue
     @State private var editingFolder: MemoFolder?
     @State private var showNewFolder = false
 
     var body: some View {
         NavigationStack {
             List {
-                NavigationLink { FilteredMemoList(title: "未分類", memos: memos.filter { !$0.isDeleted && $0.folder == nil }) } label: { Label("未分類", systemImage: "tray") }
+                NavigationLink { FilteredMemoList(title: "未分類", memos: memos.filter { !$0.isTrashed && $0.folder == nil }) } label: { Label("未分類", systemImage: "tray") }
+                    .listRowBackground((MemoTheme(rawValue: selectedTheme) ?? .standard).surface)
                 ForEach(folders) { folder in
-                    NavigationLink { FilteredMemoList(title: folder.name, memos: memos.filter { !$0.isDeleted && $0.folder?.id == folder.id }, initialFolder: folder) } label: {
+                    NavigationLink { FilteredMemoList(title: folder.name, memos: memos.filter { !$0.isTrashed && $0.folder?.id == folder.id }, initialFolder: folder) } label: {
                         Label(folder.name, systemImage: "folder.fill")
                     }
+                    .listRowBackground((MemoTheme(rawValue: selectedTheme) ?? .standard).surface)
                     .swipeActions {
                         Button { editingFolder = folder } label: { Label("名前変更", systemImage: "pencil") }.tint(.blue)
                         Button(role: .destructive) { MemoStore().deleteFolder(folder, memos: memos, in: context) } label: { Label("削除", systemImage: "trash") }
                     }
                 }
             }
+            .memoTheme()
             .navigationTitle("フォルダ")
             .toolbar { Button { showNewFolder = true } label: { Image(systemName: "folder.badge.plus") } }
             .sheet(isPresented: $showNewFolder) { FolderEditorView() }
@@ -45,6 +49,7 @@ private struct FolderEditorView: View {
                 TextField("フォルダ名", text: $name)
                 Section("カラー") { LazyVGrid(columns: [GridItem(.adaptive(minimum: 42))]) { ForEach(colors, id: \.self) { hex in Button { colorHex = hex } label: { Circle().fill(Color(hex: hex)).frame(width: 30, height: 30).overlay { if colorHex == hex { Image(systemName: "checkmark").foregroundStyle(.white) } } }.buttonStyle(.plain) } } }
             }
+            .memoTheme()
             .navigationTitle(folder == nil ? "フォルダ作成" : "フォルダ名変更")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
@@ -65,18 +70,47 @@ private struct FolderEditorView: View {
 }
 
 struct FilteredMemoList: View {
+    @Environment(\.modelContext) private var context
     let title: String
     let memos: [Memo]
     var initialFolder: MemoFolder? = nil
-    @State private var editingMemo: Memo?
+    @State private var selectedMemo: Memo?
     @State private var showNew = false
+    @State private var trashInProgress = false
+    @State private var operationError: String?
+    private var visibleMemos: [Memo] { memos.filter { !$0.isTrashed } }
+
     var body: some View {
-        List(memos) { memo in MemoRow(memo: memo).contentShape(Rectangle()).onTapGesture { editingMemo = memo } }
+        List(visibleMemos) { memo in
+            MemoRow(memo: memo).contentShape(Rectangle()).onTapGesture { selectedMemo = memo }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) { trash(memo) } label: { Label("ゴミ箱", systemImage: "trash") }
+                }
+                .contextMenu {
+                    Button(role: .destructive) { trash(memo) } label: { Label("ゴミ箱へ移動", systemImage: "trash") }
+                }
+        }
+        .overlay { if trashInProgress { ProgressView("ゴミ箱へ移動中…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) } }
+        .disabled(trashInProgress)
+        .memoTheme()
             .navigationTitle(title)
-            .toolbar { Button { showNew = true } label: { Image(systemName: "plus") } }
-            .overlay { if memos.isEmpty { ContentUnavailableView("メモはありません", systemImage: "note.text") } }
-            .sheet(item: $editingMemo) { MemoEditorView(memo: $0) }
-            .sheet(isPresented: $showNew) { MemoEditorView(initialFolder: initialFolder) }
+        .toolbar { Button { showNew = true } label: { Image(systemName: "plus") } }
+        .overlay { if visibleMemos.isEmpty { ContentUnavailableView("メモはありません", systemImage: "note.text") } }
+        .sheet(item: $selectedMemo) { MemoReadOnlyView(memo: $0) }
+        .sheet(isPresented: $showNew) { MemoEditorView(initialFolder: initialFolder) }
+        .alert("ゴミ箱へ移動できませんでした", isPresented: Binding(get: { operationError != nil }, set: { if !$0 { operationError = nil } })) {
+            Button("OK") { operationError = nil }
+        } message: { Text(operationError ?? "") }
+    }
+
+    private func trash(_ memo: Memo) {
+        guard !trashInProgress else { return }
+        trashInProgress = true
+        Task { @MainActor in
+            defer { trashInProgress = false }
+            do { try await MemoStore().moveToTrash([memo], in: context) }
+            catch { operationError = AuthenticationService.message(for: error, fallback: "ゴミ箱への移動に失敗しました。") }
+        }
     }
 }
 

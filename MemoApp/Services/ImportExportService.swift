@@ -39,7 +39,7 @@ enum ImportExportService {
             folders: folders.filter { usedFolderIDs.contains($0.id) }.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex, createdAt: $0.createdAt) },
             tags: tags.filter { usedTagIDs.contains($0.id) }.map { .init(id: $0.id, name: $0.name, createdAt: $0.createdAt) },
             memos: memos.map { memo in
-                .init(id: memo.id, title: memo.title, content: memo.content, createdAt: memo.createdAt, updatedAt: memo.updatedAt, folderID: memo.folder?.id, tagIDs: memo.tags.map(\.id), tags: memo.tags.map(\.name), isDeleted: memo.isDeleted, deletedAt: memo.deletedAt, isPinned: memo.isPinned, format: memo.format)
+                .init(id: memo.id, title: memo.title, content: memo.content, createdAt: memo.createdAt, updatedAt: memo.updatedAt, folderID: memo.folder?.id, tagIDs: memo.tags.map(\.id), tags: memo.tags.map(\.name), isDeleted: memo.isTrashed, deletedAt: memo.deletedAt, isPinned: memo.isPinned, format: memo.format)
             }
         )
         let encoder = JSONEncoder()
@@ -66,7 +66,7 @@ enum ImportExportService {
         var count = 0
         for record in archive.memos where !existingIDs.contains(record.id) {
             let memoTags = record.tagIDs.compactMap { tags[$0] }
-            context.insert(Memo(id: record.id, title: record.title, content: record.content, createdAt: record.createdAt, updatedAt: record.updatedAt, folder: record.folderID.flatMap { folders[$0] }, tags: memoTags, isDeleted: record.isDeleted, deletedAt: record.deletedAt, isPinned: record.isPinned, format: record.format))
+            context.insert(Memo(id: record.id, title: record.title, content: record.content, createdAt: record.createdAt, updatedAt: record.updatedAt, folder: record.folderID.flatMap { folders[$0] }, tags: memoTags, isTrashed: record.isDeleted, deletedAt: record.deletedAt, isPinned: record.isPinned, format: record.format))
             count += 1
         }
         try context.save()

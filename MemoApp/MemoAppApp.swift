@@ -36,6 +36,7 @@ struct MemoAppApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(\.locale, Locale(identifier: "ja_JP"))
         }
         .modelContainer(container)
     }

@@ -35,12 +35,12 @@ final class FirestoreService: @unchecked Sendable {
         var data: [String: Any] = [
             "title": title, "body": memo.content, "type": "text", "format": memo.format,
             "folderId": memo.folder.map { $0.cloudID as Any } ?? NSNull(), "tags": memo.tags.map(\.name), "pinned": memo.isPinned,
-            "trashed": memo.isDeleted, "trashedAt": memo.deletedAt.map { Timestamp(date: $0) as Any } ?? NSNull(),
             "updatedBy": user.uid, "updatedByName": user.displayName ?? "名前未設定", "updatedAt": FieldValue.serverTimestamp()
         ]
         let reference = db.collection("memos").document(memo.cloudID)
         if isNew {
-            data.merge(["groupId": Self.groupID, "lastOpenedAt": FieldValue.serverTimestamp(), "createdBy": user.uid,
+            data.merge(["trashed": memo.isTrashed, "trashedAt": memo.deletedAt.map { Timestamp(date: $0) as Any } ?? NSNull(),
+                        "groupId": Self.groupID, "lastOpenedAt": FieldValue.serverTimestamp(), "createdBy": user.uid,
                         "createdByName": user.displayName ?? "名前未設定", "createdAt": FieldValue.serverTimestamp()]) { _, new in new }
             try await reference.setData(data)
         } else { try await reference.updateData(data) }

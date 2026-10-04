@@ -5,12 +5,13 @@ import SwiftData
 final class Memo {
     @Attribute(.unique) var id: UUID
     var cloudID: String
+    var cloudUpdatedAt: Date? = nil
     var isCloudBacked: Bool
     var title: String
     var content: String
     var createdAt: Date
     var updatedAt: Date
-    var isDeleted: Bool
+    @Attribute(originalName: "isDeleted") var isTrashed: Bool
     var deletedAt: Date?
     var isPinned: Bool
     var format: String
@@ -22,7 +23,7 @@ final class Memo {
         title: String = "", content: String = "",
         createdAt: Date = .now, updatedAt: Date = .now,
         folder: MemoFolder? = nil, tags: [MemoTag] = [],
-        isDeleted: Bool = false, deletedAt: Date? = nil,
+        isTrashed: Bool = false, deletedAt: Date? = nil,
         isPinned: Bool = false, format: String = "txt"
     ) {
         self.id = id
@@ -34,7 +35,7 @@ final class Memo {
         self.updatedAt = updatedAt
         self.folder = folder
         self.tags = tags
-        self.isDeleted = isDeleted
+        self.isTrashed = isTrashed
         self.deletedAt = deletedAt
         self.isPinned = isPinned
         self.format = format
