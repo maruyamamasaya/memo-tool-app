@@ -21,6 +21,15 @@ final class AuthenticationService: ObservableObject {
             errorMessage = "GoogleService-Info.plistが必要です。Firebase ConsoleでBundle ID「\(FirebaseConfigurationService.bundleID)」のiOSアプリを登録してください。"
             return
         }
+        let previousUser = Auth.auth().currentUser
+        if let group = Bundle.main.object(forInfoDictionaryKey: "MemoAuthAccessGroup") as? String {
+            do {
+                try Auth.auth().useUserAccessGroup(group)
+                if Auth.auth().currentUser == nil, let previousUser {
+                    Task { do { try await Auth.auth().updateCurrentUser(previousUser) } catch { self.errorMessage = "共有ログインの移行に失敗しました。再ログインしてください。" } }
+                }
+            } catch { errorMessage = "共有ログインの設定に失敗しました。" }
+        }
         user = Auth.auth().currentUser
         authHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor in self?.user = user }

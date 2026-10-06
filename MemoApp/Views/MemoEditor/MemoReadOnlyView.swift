@@ -35,7 +35,7 @@ struct MemoReadOnlyView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if format.lowercased() == "md" {
+                if format.lowercased() == "md" && !["command", "code"].contains(memo?.contentKind ?? "note") {
                     MarkdownWebView(markdown: "# \(title)\n\n\(content)", themed: selectedTheme != MemoTheme.standard.rawValue)
                 } else {
                     ScrollView {
@@ -58,7 +58,7 @@ struct MemoReadOnlyView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(didCopy ? "コピーしました" : "コピー") {
-                        UIPasteboard.general.string = plainText
+                        UIPasteboard.general.string = content
                         didCopy = true
                     }
                 }
@@ -100,6 +100,7 @@ private enum MarkdownHTMLRenderer {
         h1,h2,h3,h4,h5,h6{line-height:1.25;margin:1.25em 0 .5em} h1{font-size:2em;border-bottom:1px solid #8885;padding-bottom:.25em}
         pre,code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#8882;border-radius:6px} code{padding:.15em .35em} pre{padding:14px;overflow:auto} pre code{padding:0;background:none}
         blockquote{margin:1em 0;padding:.1em 1em;border-left:4px solid #8888;color:#777} img{max-width:100%} a{color:#1677d2} hr{border:0;border-top:1px solid #8886}
+        @media(max-width:700px){body{font-size:14px;line-height:1.6;padding:16px}h1{font-size:1.35em}h2{font-size:1.2em}h3{font-size:1.1em}h4,h5,h6{font-size:1em}h1,h2,h3,h4,h5,h6{margin:1.1em 0 .5em}p,ul,ol,pre,blockquote{margin:.8em 0}li+li{margin-top:.2em}pre{padding:12px}body>:first-child{margin-top:0}}
         </style></head><body>\(body)</body></html>
         """
     }

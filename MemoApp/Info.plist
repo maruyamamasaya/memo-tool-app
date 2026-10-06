@@ -15,5 +15,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>MemoAuthAccessGroup</key>
+	<string>$(AppIdentifierPrefix)maruyama.MemoApp.shared</string>
 </dict>
 </plist>

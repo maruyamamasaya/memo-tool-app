@@ -9,10 +9,10 @@ final class MemoStore {
     func saveMemo(
         _ memo: Memo?, title: String, content: String,
         folder: MemoFolder?, tags: [MemoTag], format: String,
+        usage: String, isConfidential: Bool, contentKind: String,
         in context: ModelContext
-    ) -> Memo {
+    ) throws -> Memo {
         let now = Date.now
-        let isNew = memo == nil || memo?.isCloudBacked == false
         let savedMemo: Memo
         if let memo {
             memo.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -20,15 +20,21 @@ final class MemoStore {
             memo.folder = folder
             memo.tags = tags
             memo.format = format
+            memo.usage = usage; memo.isConfidential = isConfidential; memo.contentKind = contentKind
             memo.updatedAt = now
             savedMemo = memo
         } else {
-            let memo = Memo(title: title.trimmingCharacters(in: .whitespacesAndNewlines), content: content, updatedAt: now, folder: folder, tags: tags, format: format)
+            let memo = Memo(title: title.trimmingCharacters(in: .whitespacesAndNewlines), content: content, updatedAt: now, folder: folder, tags: tags, format: format, usage: usage, isConfidential: isConfidential, contentKind: contentKind)
             context.insert(memo); savedMemo = memo
         }
-        try? context.save()
-        Task { do { try await FirestoreService.shared.saveMemo(savedMemo, isNew: isNew); savedMemo.isCloudBacked = true; try? context.save() } catch { logger.error("Firestore保存失敗: \(error.localizedDescription, privacy: .public)") } }
+        try context.save()
         return savedMemo
+    }
+
+    func setPinned(_ memo: Memo, pinned: Bool, in context: ModelContext) async throws {
+        if memo.isCloudBacked { try await FirestoreService.shared.setPinned(memo, pinned: pinned) }
+        memo.isPinned = pinned; memo.updatedAt = .now; try context.save()
+
     }
 
     func moveToTrash(_ memos: [Memo], in context: ModelContext) async throws {

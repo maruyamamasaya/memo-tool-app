@@ -12,11 +12,14 @@ struct MemoRow: View {
                 Spacer()
                 Text(memo.updatedAt, format: .relative(presentation: .named).locale(Locale(identifier: "ja_JP"))).font(.caption).foregroundStyle(.secondary)
             }
-            if !memo.content.isEmpty {
+            if !memo.isConfidential && !memo.content.isEmpty {
                 Text(memo.content.replacingOccurrences(of: "\n", with: " "))
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
             }
             HStack(spacing: 7) {
+                Text(memo.usage == "temporary" ? "一時" : "保存")
+                if memo.isConfidential { Label("機密", systemImage: "lock") }
+                if memo.contentKind != "note" { Text(MemoInput.kindLabels[memo.contentKind] ?? "メモ") }
                 if let folder = memo.folder { Label(folder.name, systemImage: "folder.fill") }
                 ForEach(memo.tags.prefix(3)) { tag in Text("#\(tag.name)") }
             }

@@ -71,9 +71,9 @@ final class FirebaseSyncCoordinator: ObservableObject {
                         if let cloudUpdatedAt = memo.cloudUpdatedAt, record.updatedAt < cloudUpdatedAt { continue }
                         memo.cloudUpdatedAt = record.updatedAt
                         memo.title = record.title; memo.content = record.body; memo.format = record.format; memo.folder = folders.first { $0.cloudID == record.folderID }; memo.tags = memoTags; memo.isCloudBacked = true
-                        memo.isPinned = record.pinned; memo.isTrashed = record.trashed; memo.createdAt = record.createdAt; memo.updatedAt = record.updatedAt; memo.deletedAt = record.trashedAt
+                        memo.usage = record.usage; memo.isConfidential = record.confidential; memo.contentKind = record.contentKind; memo.isPinned = record.pinned; memo.isTrashed = record.trashed; memo.createdAt = record.createdAt; memo.updatedAt = record.updatedAt; memo.deletedAt = record.trashedAt
                     } else {
-                        let memo = Memo(cloudID: record.id, isCloudBacked: true, title: record.title, content: record.body, createdAt: record.createdAt, updatedAt: record.updatedAt, folder: folders.first { $0.cloudID == record.folderID }, tags: memoTags, isTrashed: record.trashed, deletedAt: record.trashedAt, isPinned: record.pinned, format: record.format)
+                        let memo = Memo(cloudID: record.id, isCloudBacked: true, title: record.title, content: record.body, createdAt: record.createdAt, updatedAt: record.updatedAt, folder: folders.first { $0.cloudID == record.folderID }, tags: memoTags, isTrashed: record.trashed, deletedAt: record.trashedAt, isPinned: record.pinned, format: record.format, usage: record.usage, isConfidential: record.confidential, contentKind: record.contentKind)
                         memo.cloudUpdatedAt = record.updatedAt
                         context.insert(memo)
                     }

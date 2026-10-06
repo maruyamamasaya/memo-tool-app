@@ -11,7 +11,7 @@ service cloud.firestore {
     }
     function validMemo(data) {
       return data.keys().hasOnly([
-          'groupId', 'title', 'body', 'type', 'format', 'folderId', 'tags', 'pinned',
+          'usage', 'confidential', 'contentKind', 'groupId', 'title', 'body', 'type', 'format', 'folderId', 'tags', 'pinned',
           'trashed', 'trashedAt', 'lastOpenedAt', 'createdBy', 'createdByName',
           'createdAt', 'updatedBy', 'updatedByName', 'updatedAt'
         ])
@@ -21,7 +21,10 @@ service cloud.firestore {
         && data.format in ['md', 'txt']
         && (data.folderId == null || data.folderId is string)
         && data.tags is list && data.tags.size() <= 20
-        && data.pinned is bool && data.trashed is bool;
+        && data.pinned is bool && data.trashed is bool
+        && (!('usage' in data) || data.usage in ['temporary', 'saved'])
+        && (!('confidential' in data) || data.confidential is bool)
+        && (!('contentKind' in data) || data.contentKind in ['note','prompt','command','code']);
     }
 
     match /users/{userId} {
@@ -46,7 +49,7 @@ service cloud.firestore {
         && request.resource.data.createdByName == resource.data.createdByName
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'title', 'body', 'type', 'format', 'folderId', 'tags', 'pinned', 'trashed',
+          'usage', 'confidential', 'contentKind', 'title', 'body', 'type', 'format', 'folderId', 'tags', 'pinned', 'trashed',
           'trashedAt', 'lastOpenedAt', 'updatedBy', 'updatedByName', 'updatedAt'
         ])
         // Opening a memo may update lastOpenedAt only; all other edits carry audit fields.

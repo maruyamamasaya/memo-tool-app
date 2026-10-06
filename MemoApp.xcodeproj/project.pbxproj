@@ -6,6 +6,28 @@
 	objectVersion = 77;
 	objects = {
 
+B20000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = B20000000000000000000008; buildPhases = (B20000000000000000000005, B20000000000000000000006, B20000000000000000000007); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (B20000000000000000000003); name = MemoShare; packageProductDependencies = (B2000000000000000000000F, B20000000000000000000010, B20000000000000000000011); productName = MemoShare; productReference = B20000000000000000000002; productType = "com.apple.product-type.app-extension"; };
+B20000000000000000000002 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MemoShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+B20000000000000000000003 = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (B20000000000000000000004); path = MemoShare; sourceTree = "<group>"; };
+B20000000000000000000004 = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist); target = B20000000000000000000001; };
+B20000000000000000000005 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+B20000000000000000000006 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (B20000000000000000000012, B20000000000000000000013, B20000000000000000000014); runOnlyForDeploymentPostprocessing = 0; };
+B20000000000000000000007 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+B20000000000000000000008 = {isa = XCConfigurationList; buildConfigurations = (B20000000000000000000009, B2000000000000000000000A); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+B2000000000000000000000B = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (B2000000000000000000000C); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+B2000000000000000000000C = {isa = PBXBuildFile; fileRef = B20000000000000000000002; settings = {ATTRIBUTES = (RemoveHeadersOnCopy); }; };
+B2000000000000000000000D = {isa = PBXContainerItemProxy; containerPortal = FCC1BFFE302CB8D700C78471; proxyType = 1; remoteGlobalIDString = B20000000000000000000001; remoteInfo = MemoShare; };
+B2000000000000000000000E = {isa = PBXTargetDependency; target = B20000000000000000000001; targetProxy = B2000000000000000000000D; };
+B2000000000000000000000F = {isa = XCSwiftPackageProductDependency; package = A10000000000000000000021; productName = FirebaseCore; };
+B20000000000000000000012 = {isa = PBXBuildFile; productRef = B2000000000000000000000F; };
+B20000000000000000000010 = {isa = XCSwiftPackageProductDependency; package = A10000000000000000000021; productName = FirebaseAuth; };
+B20000000000000000000013 = {isa = PBXBuildFile; productRef = B20000000000000000000010; };
+B20000000000000000000011 = {isa = XCSwiftPackageProductDependency; package = A10000000000000000000021; productName = FirebaseFirestore; };
+B20000000000000000000014 = {isa = PBXBuildFile; productRef = B20000000000000000000011; };
+B20000000000000000000009 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; CODE_SIGN_ENTITLEMENTS = MemoShare/MemoShare.entitlements; DEVELOPMENT_TEAM = U29GY347DY; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = MemoShare/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 26.5; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = maruyama.MemoApp.Share; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks"); }; };
+B2000000000000000000000A = {isa = XCBuildConfiguration; name = Release; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; CODE_SIGN_ENTITLEMENTS = MemoShare/MemoShare.entitlements; DEVELOPMENT_TEAM = U29GY347DY; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = MemoShare/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 26.5; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = maruyama.MemoApp.Share; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks"); }; };
+
+
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000011 /* FirebaseCore */; };
 		A10000000000000000000002 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000012 /* FirebaseAuth */; };
@@ -57,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				FCC1C008302CB8D700C78471 /* MemoApp */,
+				B20000000000000000000003,
 				FCC1C007302CB8D700C78471 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -65,6 +88,7 @@
 			isa = PBXGroup;
 			children = (
 				FCC1C006302CB8D700C78471 /* MemoApp.app */,
+				B20000000000000000000002,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -79,10 +103,12 @@
 				FCC1C002302CB8D700C78471 /* Sources */,
 				FCC1C003302CB8D700C78471 /* Frameworks */,
 				FCC1C004302CB8D700C78471 /* Resources */,
+				B2000000000000000000000B,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B2000000000000000000000E,
 			);
 			fileSystemSynchronizedGroups = (
 				FCC1C008302CB8D700C78471 /* MemoApp */,
@@ -132,6 +158,7 @@
 			projectRoot = "";
 			targets = (
 				FCC1C005302CB8D700C78471 /* MemoApp */,
+				B20000000000000000000001,
 			);
 		};
 /* End PBXProject section */
@@ -283,6 +310,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = MemoApp/MemoApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = U29GY347DY;
@@ -316,6 +344,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = MemoApp/MemoApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = U29GY347DY;

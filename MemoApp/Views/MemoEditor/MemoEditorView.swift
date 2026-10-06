@@ -6,162 +6,129 @@ struct MemoEditorView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \MemoFolder.name) private var folders: [MemoFolder]
     @Query(sort: \MemoTag.name) private var allTags: [MemoTag]
-
     private let originalMemo: Memo?
-    private let store = MemoStore()
-
     @State private var workingMemo: Memo?
     @State private var editorText: String
+    @State private var rawTitle: String
+    @State private var rawTags: String
+    @State private var rawMode: Bool
     @State private var folderID: UUID?
     @State private var format: String
-    @State private var saveTask: Task<Void, Never>?
+    @State private var usage: String
+    @State private var confidential: Bool
+    @State private var contentKind: String
+    @State private var debounce: Task<Void, Never>?
     @State private var saveStatus = ""
     @State private var hasChanges = false
+    @State private var saving = false
+    @State private var revision = 0
     @FocusState private var editorFocused: Bool
 
-    init(memo: Memo? = nil, initialFolder: MemoFolder? = nil) {
+    init(memo: Memo? = nil, initialFolder: MemoFolder? = nil, initialUsage: String = "temporary") {
         originalMemo = memo
-        _workingMemo = State(initialValue: memo)
-        _editorText = State(initialValue: Self.editorText(for: memo))
+                _workingMemo = State(initialValue: memo)
+        _rawMode = State(initialValue: true)
+        _rawTitle = State(initialValue: memo?.title ?? "")
+        _rawTags = State(initialValue: memo?.tags.map(\.name).joined(separator: " ") ?? "")
+        _editorText = State(initialValue: memo?.content ?? "")
         _folderID = State(initialValue: memo?.folder?.id ?? initialFolder?.id)
         _format = State(initialValue: memo?.format ?? "txt")
+        _usage = State(initialValue: memo?.usage ?? initialUsage)
+        _confidential = State(initialValue: memo?.isConfidential ?? false)
+        _contentKind = State(initialValue: memo?.contentKind ?? "note")
     }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Text("メモ")
-                    Image(systemName: "chevron.right").font(.caption2)
+                HStack {
+                    Picker("用途", selection: $usage) { Text("一時").tag("temporary"); Text("保存").tag("saved") }
+                    Picker("内容", selection: $contentKind) {
+                        ForEach(["note", "prompt", "command", "code"], id: \.self) { Text(MemoInput.kindLabels[$0]!).tag($0) }
+                    }
+                    Toggle("機密", isOn: $confidential).fixedSize()
+                }.font(.caption).padding(.horizontal)
+                HStack {
                     Picker("フォルダ", selection: $folderID) {
                         Text("未分類").tag(UUID?.none)
                         ForEach(folders) { Text($0.name).tag(Optional($0.id)) }
                     }
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    Picker("形式", selection: $format) {
-                        Text(".md").tag("md")
-                        Text(".txt").tag("txt")
-                    }
-                    .labelsHidden()
-                    .fixedSize()
+                    Picker("形式", selection: $format) { Text(".md").tag("md"); Text(".txt").tag("txt") }
+                    Toggle("本文そのまま", isOn: $rawMode).fixedSize()
+                }.font(.caption).padding(.horizontal)
+                if rawMode {
+                    TextField("タイトル（省略可）", text: $rawTitle).padding(.horizontal)
+                    TextField("タグ（スペース区切り）", text: $rawTags).font(.caption).padding(.horizontal)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-
-                ZStack(alignment: .topLeading) {
-                    if editorText.isEmpty {
-                        Text("タイトルを入力してください…\n\n本文を入力\n\n#タグ")
-                            .font(.body.monospaced())
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 18)
-                            .allowsHitTesting(false)
-                    }
-                    TextEditor(text: $editorText)
-                        .font(.body.monospaced())
-                        .lineSpacing(7)
-                        .scrollContentBackground(.hidden)
-                        .padding(.horizontal, 12)
-                        .focused($editorFocused)
-                }
-
+                TextEditor(text: $editorText).font(.body.monospaced()).lineSpacing(5)
+                    .scrollContentBackground(.hidden).padding(.horizontal, 12).focused($editorFocused)
+                    .accessibilityLabel("メモ本文")
                 HStack {
-                    Text("1行目がタイトル、最終行の #文字がタグです")
+                    Text(rawMode ? "改行・空白・#をそのまま保存" : "1行目はタイトル、最終行は #タグ")
                     Spacer()
-                    Text(saveStatus)
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 7)
+                    Text(saveStatus).accessibilityIdentifier("save-status")
+                }.font(.caption2).foregroundStyle(.secondary).padding(12)
             }
-            .memoTheme()
-            .navigationTitle(originalMemo == nil ? "新規メモ" : "メモ編集中")
+            .memoTheme().navigationTitle(originalMemo == nil ? "新規メモ" : "メモ編集中")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("閉じる", action: close) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "保存中…" : "閉じる") { Task { if !hasChanges { dismiss() } else if await save() { dismiss() } } }.disabled(saving)
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button("保存 / 再試行") { Task { _ = await save() } }.disabled(saving)
+                }
             }
+            .interactiveDismissDisabled(hasChanges || saving)
             .onAppear { editorFocused = true }
             .onChange(of: editorText) { _, _ in scheduleSave() }
+            .onChange(of: rawTitle) { _, _ in scheduleSave() }
+            .onChange(of: rawTags) { _, _ in scheduleSave() }
             .onChange(of: folderID) { _, _ in scheduleSave() }
             .onChange(of: format) { _, _ in scheduleSave() }
-            .onDisappear { saveTask?.cancel(); if hasChanges { save() } }
-        }
-    }
-
-    private static func editorText(for memo: Memo?) -> String {
-        guard let memo else { return "" }
-        var lines = [memo.title, memo.content]
-        if !memo.tags.isEmpty { lines.append(memo.tags.map { "#\($0.name)" }.joined(separator: " ")) }
-        while lines.last?.isEmpty == true { lines.removeLast() }
-        return lines.joined(separator: "\n")
-    }
-
-    private func scheduleSave() {
-        hasChanges = true
-        saveStatus = "編集中…"
-        saveTask?.cancel()
-        saveTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1.5))
-            guard !Task.isCancelled else { return }
-            save()
-        }
-    }
-
-    private func close() {
-        saveTask?.cancel()
-        if hasChanges { save() }
-        dismiss()
-    }
-
-    private func save() {
-        let parsed = parseEditor()
-        guard !parsed.title.isEmpty || !parsed.body.isEmpty else {
-            saveStatus = ""
-            hasChanges = false
-            return
-        }
-        let tags = parsed.tagNames.map { name -> MemoTag in
-            if let existing = allTags.first(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) { return existing }
-            let tag = MemoTag(name: name)
-            context.insert(tag)
-            return tag
-        }
-        workingMemo = store.saveMemo(
-            workingMemo,
-            title: parsed.title.isEmpty ? "無題のメモ" : parsed.title,
-            content: parsed.body,
-            folder: folders.first { $0.id == folderID },
-            tags: tags,
-            format: parsed.format,
-            in: context
-        )
-        if format != parsed.format { format = parsed.format }
-        hasChanges = false
-        saveStatus = "保存しました"
-    }
-
-    private func parseEditor() -> (title: String, body: String, tagNames: [String], format: String) {
-        var lines = editorText.replacingOccurrences(of: "\r", with: "").components(separatedBy: "\n")
-        var title = (lines.isEmpty ? "" : lines.removeFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
-        var parsedFormat = format
-        if let match = title.range(of: #"\.(md|txt)$"#, options: [.regularExpression, .caseInsensitive]) {
-            parsedFormat = String(title[match]).dropFirst().lowercased()
-            title.removeSubrange(match)
-            title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        var tagNames: [String] = []
-        if let last = lines.last, last.trimmingCharacters(in: .whitespaces).hasPrefix("#") {
-            lines.removeLast()
-            let pieces = last.components(separatedBy: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",、")))
-            for piece in pieces {
-                let name = piece.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !name.isEmpty && !tagNames.contains(name) && tagNames.count < 20 { tagNames.append(name) }
+            .onChange(of: usage) { _, _ in scheduleSave() }
+            .onChange(of: confidential) { _, _ in scheduleSave() }
+            .onChange(of: contentKind) { _, _ in scheduleSave() }
+            .onChange(of: rawMode) { _, raw in
+                if raw { let p = MemoInput.parse(editorText, format: format); rawTitle = p.title; rawTags = p.tags.joined(separator: " "); editorText = p.body }
+                else { editorText = [rawTitle, editorText] .joined(separator: "\n") + (rawTags.isEmpty ? "" : "\n" + MemoInput.parseTags(rawTags).map { "#\($0)" }.joined(separator: " ")) }
+                scheduleSave()
             }
+            .onDisappear { debounce?.cancel() }
         }
-        return (title, lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines), tagNames, parsedFormat)
+    }
+
+    private static func combined(_ memo: Memo?) -> String {
+        guard let memo else { return "" }
+        return [memo.title, memo.content].joined(separator: "\n") + (memo.tags.isEmpty ? "" : "\n" + memo.tags.map { "#\($0.name)" }.joined(separator: " "))
+    }
+    private func scheduleSave() {
+        hasChanges = true; revision += 1; saveStatus = "編集中…"; debounce?.cancel()
+        debounce = Task { @MainActor in
+            do { try await Task.sleep(for: .seconds(1.5)) } catch { return }
+            _ = await save()
+        }
+    }
+    @MainActor private func save() async -> Bool {
+        guard !saving else { return false }
+        let parsed = rawMode ? (title: String(rawTitle.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120)), body: editorText, tags: MemoInput.parseTags(rawTags), format: format) : MemoInput.parse(editorText, format: format)
+        guard !parsed.title.isEmpty || !parsed.body.isEmpty else { hasChanges = false; return true }
+        let currentRevision = revision
+        saving = true; saveStatus = "保存中…"
+        defer { saving = false }
+        do {
+            let tags = parsed.tags.map { name -> MemoTag in
+                if let existing = allTags.first(where: { $0.name == name }) { return existing }
+                let tag = MemoTag(name: name); context.insert(tag); return tag
+            }
+            let memo = try MemoStore().saveMemo(workingMemo, title: parsed.title.isEmpty ? "無題のメモ" : parsed.title, content: parsed.body, folder: folders.first { $0.id == folderID }, tags: tags, format: parsed.format, usage: usage, isConfidential: confidential, contentKind: contentKind, in: context)
+            workingMemo = memo
+            try await FirestoreService.shared.saveMemo(memo, isNew: !memo.isCloudBacked)
+            memo.isCloudBacked = true; try context.save()
+            hasChanges = revision != currentRevision
+            saveStatus = hasChanges ? "編集中…" : "保存済み"
+            if hasChanges { scheduleSave() }
+            return !hasChanges
+        } catch { hasChanges = true; saveStatus = "同期失敗 · 再試行"; return false }
     }
 }

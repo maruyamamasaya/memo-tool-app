@@ -9,9 +9,18 @@ struct RootView: View {
     @StateObject private var auth = AuthenticationService()
     @StateObject private var sync = FirebaseSyncCoordinator()
 
+    private var fixtureMode: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--ui-fixture")
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
         Group {
-            if !auth.isConfigured { FirebaseSetupRequiredView(message: auth.errorMessage) }
+            if fixtureMode { HomeView() }
+            else if !auth.isConfigured { FirebaseSetupRequiredView(message: auth.errorMessage) }
             else if auth.user == nil { LoginView() }
             else {
                 TabView {

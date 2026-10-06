@@ -14,6 +14,9 @@ final class Memo {
     @Attribute(originalName: "isDeleted") var isTrashed: Bool
     var deletedAt: Date?
     var isPinned: Bool
+    var usage: String = "saved"
+    var isConfidential: Bool = false
+    var contentKind: String = "note"
     var format: String
     var folder: MemoFolder?
     @Relationship(deleteRule: .nullify) var tags: [MemoTag]
@@ -24,7 +27,8 @@ final class Memo {
         createdAt: Date = .now, updatedAt: Date = .now,
         folder: MemoFolder? = nil, tags: [MemoTag] = [],
         isTrashed: Bool = false, deletedAt: Date? = nil,
-        isPinned: Bool = false, format: String = "txt"
+        isPinned: Bool = false, format: String = "txt",
+        usage: String = "saved", isConfidential: Bool = false, contentKind: String = "note"
     ) {
         self.id = id
         self.cloudID = cloudID
@@ -39,6 +43,9 @@ final class Memo {
         self.deletedAt = deletedAt
         self.isPinned = isPinned
         self.format = format
+        self.usage = usage
+        self.isConfidential = isConfidential
+        self.contentKind = contentKind
     }
 
     var displayTitle: String {

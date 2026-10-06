@@ -24,12 +24,17 @@ struct MemoPersistenceRegression {
         precondition(memo.title == "移行テスト" && memo.content == "本文を保持")
         precondition(memo.folder?.name == "検証フォルダ" && memo.tags.first?.name == "検証タグ")
         precondition(!memo.isTrashed)
+        precondition(memo.usage == "saved" && !memo.isConfidential && memo.contentKind == "note", "Legacy memo metadata defaults")
+        memo.usage = "temporary"; memo.isConfidential = true; memo.contentKind = "command"
+        memo.content = "  echo hello\r\n\t# comment\n"
         memo.isTrashed = true
         memo.deletedAt = .now
         try context.save()
         precondition(memo.isTrashed, "Saving must preserve the trash flag")
         let reloaded = try ModelContext(container).fetch(FetchDescriptor<Memo>()).first!
         precondition(reloaded.isTrashed && reloaded.deletedAt != nil)
+        precondition(reloaded.usage == "temporary" && reloaded.isConfidential && reloaded.contentKind == "command")
+        precondition(reloaded.content == "  echo hello\r\n\t# comment\n")
         memo.isTrashed = false
         memo.deletedAt = nil
         try context.save()

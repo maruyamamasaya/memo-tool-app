@@ -33,6 +33,7 @@ final class FirestoreService: @unchecked Sendable {
         guard let user = Auth.auth().currentUser else { throw CloudError.notAuthenticated }
         let title = memo.displayTitle
         var data: [String: Any] = [
+            "usage": memo.usage, "confidential": memo.isConfidential, "contentKind": memo.contentKind,
             "title": title, "body": memo.content, "type": "text", "format": memo.format,
             "folderId": memo.folder.map { $0.cloudID as Any } ?? NSNull(), "tags": memo.tags.map(\.name), "pinned": memo.isPinned,
             "updatedBy": user.uid, "updatedByName": user.displayName ?? "名前未設定", "updatedAt": FieldValue.serverTimestamp()
@@ -44,6 +45,11 @@ final class FirestoreService: @unchecked Sendable {
                         "createdByName": user.displayName ?? "名前未設定", "createdAt": FieldValue.serverTimestamp()]) { _, new in new }
             try await reference.setData(data)
         } else { try await reference.updateData(data) }
+    }
+
+    func setPinned(_ memo: Memo, pinned: Bool) async throws {
+        guard let user = Auth.auth().currentUser else { throw CloudError.notAuthenticated }
+        try await db.collection("memos").document(memo.cloudID).updateData(["pinned": pinned, "updatedBy": user.uid, "updatedByName": user.displayName ?? "名前未設定", "updatedAt": FieldValue.serverTimestamp()])
     }
 
     func setTrash(_ memos: [Memo], deleted: Bool) async throws {
@@ -86,9 +92,10 @@ final class FirestoreService: @unchecked Sendable {
 
 struct CloudMemo: Sendable {
     let id, title, body, format: String; let folderID: String?; let tags: [String]
+    let usage, contentKind: String; let confidential: Bool
     let pinned, trashed: Bool; let createdAt, updatedAt: Date; let trashedAt: Date?
     nonisolated init?(_ document: QueryDocumentSnapshot) {
-        let data = document.data(); id = document.documentID; title = data["title"] as? String ?? ""; body = data["body"] as? String ?? ""
+        let data = document.data(); usage = data["usage"] as? String == "temporary" ? "temporary" : "saved"; confidential = data["confidential"] as? Bool ?? false; contentKind = data["contentKind"] as? String ?? "note"; id = document.documentID; title = data["title"] as? String ?? ""; body = data["body"] as? String ?? ""
         format = ["md", "txt"].contains(data["format"] as? String ?? "") ? data["format"] as! String : "txt"
         folderID = data["folderId"] as? String; tags = data["tags"] as? [String] ?? []; pinned = data["pinned"] as? Bool ?? false; trashed = data["trashed"] as? Bool ?? false
         createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? .now; updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue() ?? createdAt; trashedAt = (data["trashedAt"] as? Timestamp)?.dateValue()
